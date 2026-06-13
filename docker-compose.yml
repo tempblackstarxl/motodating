@@ -1,0 +1,40 @@
+name: motodating
+
+services:
+  backend:
+    build: ./backend
+    environment:
+      - DATABASE_URL=file:/data/dev.db
+      - PORT=3000
+      - HOST=0.0.0.0
+      # Раскомментируйте, чтобы включить боевой режим (проверка Telegram initData)
+      # и уведомления о мэтчах:
+      # - BOT_TOKEN=${BOT_TOKEN}
+    volumes:
+      - db_data:/data
+      - uploads:/app/uploads
+    ports:
+      - "3000:3000" # для прямого доступа к API (опционально)
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+    restart: unless-stopped
+
+  # Бот запускается только с профилем: docker compose --profile bot up
+  # Перед этим заполните bot/.env (BOT_TOKEN, WEBAPP_URL).
+  bot:
+    build: ./bot
+    profiles: ["bot"]
+    env_file:
+      - path: ./bot/.env
+        required: false
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  uploads:

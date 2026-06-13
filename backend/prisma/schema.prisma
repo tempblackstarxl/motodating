@@ -1,0 +1,63 @@
+// MotoDating — модель данных (MVP)
+// На старте используем SQLite для простого локального запуска.
+// Для продакшена меняем provider на "postgresql" (см. ТЗ, раздел "Хостинг").
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Роль хранится строкой: "girl" | "rider" (SQLite не поддерживает enum).
+
+model User {
+  id         String   @id // telegram user id
+  username   String? // telegram @username (для ссылки "написать")
+  role       String // "girl" | "rider"
+  name       String
+  age        Int
+  city       String
+  bio        String   @default("")
+  isVisible  Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  photos     Photo[]
+  likesSent     Like[]  @relation("LikesSent")
+  likesReceived Like[]  @relation("LikesReceived")
+
+  @@index([role])
+}
+
+model Photo {
+  id     String @id @default(cuid())
+  url    String
+  order  Int    @default(0)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  @@index([userId])
+}
+
+model Like {
+  id         String   @id @default(cuid())
+  from       User     @relation("LikesSent", fields: [fromId], references: [id], onDelete: Cascade)
+  fromId     String
+  to         User     @relation("LikesReceived", fields: [toId], references: [id], onDelete: Cascade)
+  toId       String
+  createdAt  DateTime @default(now())
+
+  @@unique([fromId, toId])
+  @@index([toId])
+}
+
+model Match {
+  id        String   @id @default(cuid())
+  userAId   String
+  userBId   String
+  createdAt DateTime @default(now())
+
+  @@unique([userAId, userBId])
+}

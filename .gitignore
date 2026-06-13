@@ -1,0 +1,16 @@
+node_modules/
+dist/
+build/
+.env
+*.log
+
+# Prisma / SQLite
+backend/prisma/*.db
+backend/prisma/*.db-journal
+
+# Uploaded photos (test storage)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# OS
+.DS_Store
