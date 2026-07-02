@@ -33,6 +33,16 @@ export function startBot() {
 
   bot.catch((err) => console.error("Помилка бота:", err));
 
-  // Long polling; не чекаємо завершення.
-  bot.start({ onStart: (me) => console.log(`[bot] @${me.username} запущено.`) });
+  // Long polling. У момент деплою можливий конфлікт 409 (стара ревізія ще
+  // опитує Telegram) — не падаємо, а повторюємо спробу, поки не станемо єдиним інстансом.
+  const launch = () => {
+    bot
+      .start({ onStart: (me) => console.log(`[bot] @${me.username} запущено.`) })
+      .catch((err) => {
+        const msg = err?.message ?? String(err);
+        console.error(`[bot] помилка long polling, повтор через 5с: ${msg}`);
+        setTimeout(launch, 5000);
+      });
+  };
+  launch();
 }
