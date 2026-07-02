@@ -15,34 +15,67 @@ export function startBot() {
     return;
   }
 
-  const bot = new Bot(token);
+  let bot: Bot | null = null;
+  let restartScheduled = false;
 
-  bot.command("start", async (ctx) => {
-    const keyboard = new InlineKeyboard().webApp("🏍️ Відкрити MotoDating", webAppUrl);
-    await ctx.reply(
-      "Привіт! 🏍️❤️\n\nMotoDating — знайомства дівчат і хлопців, що люблять мотоцикли.\n" +
-        "Заповни анкету, гортай стрічку і знаходь того, з ким покататися!\n\n" +
-        "Лише 18+.",
-      { reply_markup: keyboard }
-    );
-  });
+  const buildBot = () => {
+    const b = new Bot(token);
 
-  bot.command("help", async (ctx) => {
-    await ctx.reply("Натисни /start, щоб відкрити застосунок MotoDating.");
-  });
+    b.command("start", async (ctx) => {
+      const keyboard = new InlineKeyboard().webApp("🏍️ Відкрити MotoDating", webAppUrl);
+      await ctx.reply(
+        "Привіт! 🏍️❤️\n\nMotoDating — знайомства дівчат і хлопців, що люблять мотоцикли.\n" +
+          "Заповни анкету, гортай стрічку і знаходь того, з ким покататися!\n\n" +
+          "Лише 18+.",
+        { reply_markup: keyboard }
+      );
+    });
 
-  bot.catch((err) => console.error("Помилка бота:", err));
+    b.command("help", async (ctx) => {
+      await ctx.reply("Натисни /start, щоб відкрити застосунок MotoDating.");
+    });
 
-  // Long polling. У момент деплою можливий конфлікт 409 (стара ревізія ще
-  // опитує Telegram) — не падаємо, а повторюємо спробу, поки не станемо єдиним інстансом.
+    // Помилки всередині обробників оновлень.
+    b.catch((err) => console.error("Помилка бота:", err));
+
+    return b;
+  };
+
+  // Перезапуск long polling із затримкою. Потрібен, бо під час деплою
+  // старий контейнер ще опитує Telegram і новий отримує 409 Conflict.
+  const scheduleRestart = (reason: unknown) => {
+    if (restartScheduled) return;
+    restartScheduled = true;
+    const msg = (reason as { description?: string; message?: string })?.description
+      ?? (reason as { message?: string })?.message
+      ?? String(reason);
+    console.error(`[bot] проблема long polling, перезапуск через 7с: ${msg}`);
+    bot?.stop().catch(() => {});
+    setTimeout(() => {
+      restartScheduled = false;
+      launch();
+    }, 7000);
+  };
+
   const launch = () => {
+    bot = buildBot();
     bot
       .start({ onStart: (me) => console.log(`[bot] @${me.username} запущено.`) })
-      .catch((err) => {
-        const msg = err?.message ?? String(err);
-        console.error(`[bot] помилка long polling, повтор через 5с: ${msg}`);
-        setTimeout(launch, 5000);
-      });
+      .catch((err) => scheduleRestart(err));
   };
+
+  // Помилки циклу опитування можуть спливати як unhandledRejection (поза promise від start()).
+  // Не даємо процесу впасти: якщо це помилка бота — перезапускаємо опитування.
+  process.on("unhandledRejection", (reason) => {
+    const msg = (reason as { description?: string; message?: string })?.description
+      ?? (reason as { message?: string })?.message
+      ?? String(reason);
+    if (typeof msg === "string" && msg.toLowerCase().includes("getupdates")) {
+      scheduleRestart(reason);
+    } else {
+      console.error("[bot] необроблена помилка (проігноровано):", msg);
+    }
+  });
+
   launch();
 }
